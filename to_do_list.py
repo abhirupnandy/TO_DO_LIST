@@ -2,7 +2,10 @@
 import sqlite3
 
 # library to work with encrypted passwords
-import hashlib
+import hashlib, getpass
+
+# other libraries
+import datetime, time
 
 
 # CLASSES
@@ -25,8 +28,8 @@ class ToDos:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, 
                 user_id INTEGER, 
                 task TEXT, 
-                date DATE, 
-                time TIME, 
+                date TEXT, 
+                time TEXT, 
                 priority INTEGER, 
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
             )"""
@@ -35,7 +38,14 @@ class ToDos:
         self.conn.commit()
 
     # function to add new task
-    def add_task(self, user_id, task, date, time, priority):
+    def add_task(
+        self,
+        user_id,
+        task,
+        date,
+        time,
+        priority,
+    ):
         self.c.execute(
             "INSERT INTO to_do_list (user_id, task, date, time, priority) VALUES (?, ?, ?, ?, ?)",
             (user_id, task, date, time, priority),
@@ -48,7 +58,15 @@ class ToDos:
         self.conn.commit()
 
     # function to update task
-    def update_task(self, task_id, task, date, time, priority):
+    # default date and time  = current date and time
+    def update_task(
+        self,
+        task_id,
+        task,
+        date,
+        time,
+        priority,
+    ):
         self.c.execute(
             "UPDATE to_do_list SET task=?, date=?, time=?, priority=? WHERE id=?",
             (task, date, time, priority, task_id),
@@ -69,6 +87,12 @@ class ToDos:
     def check_user(self, user_id, task_id):
         self.c.execute("SELECT user_id FROM to_do_list WHERE id=?", (task_id,))
         return self.c.fetchone()[0] == user_id
+
+    def close(self):
+        print("\nExiting the application...")
+        self.conn.close()
+        time.sleep(1)
+        print("Goodbye!")
 
 
 class Users:
@@ -98,7 +122,6 @@ class Users:
             "INSERT INTO users (username, password) VALUES (?, ?)", (username, password)
         )
         self.conn.commit()
-
         # return user id
         self.c.execute("SELECT id FROM users WHERE username=?", (username,))
         return self.c.fetchone()[0]
@@ -115,10 +138,203 @@ class Users:
         return self.c.fetchone()[0] == password
 
 
-# VARIABLES
-
-
 # FUNCTIONS
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def main():
+    # print the welcome message with a box around it
+    try:
+        print("+" + "-" * 58 + "+")
+        print("|" + " " * 58 + "|")
+        print("|" + " " * 10 + "Welcome to the To-Do List Application" + " " * 11 + "|")
+        print("|" + " " * 58 + "|")
+        print("+" + "-" * 58 + "+")
+
+        # print that the application is loading
+        # time.sleep(3)
+        print("Loading the databases...")
+        # create users and to_do_list objects
+        users = Users()
+        to_do_list = ToDos()
+        USER_ID = None
+        # time.sleep(2)
+        print("Databases loaded.")
+        # time.sleep(1)
+        print("+" + "-" * 58 + "+")
+        # catch ctrl+c
+
+        print(
+            "Please select an option:" "\n1. Login" "\n2. Create new user" "\n3. Exit"
+        )
+        print("+" + "-" * 58 + "+")
+        option = int(input("Option: "))
+
+        # while user_id is not defined, ask for login or create new user
+        while USER_ID == None:
+            if option == 1:
+                # login
+                print("+" + "-" * 58 + "+")
+                username = input("Username: ")
+                # HIDE PASSWORD WHILE TYPING
+                password = getpass.getpass("Password: ")
+                password = hash_password(password)
+                print("+" + "-" * 58 + "+")
+                if users.user_exists(username):
+                    if users.check_password(username, password):
+                        USER_ID = users.c.execute(
+                            "SELECT id FROM users WHERE username=?", (username,)
+                        ).fetchone()[0]
+                        print("Login successful!")
+                        print("+" + "-" * 58 + "+")
+                        break
+                    else:
+                        print("Password incorrect!")
+                        continue
+                else:
+                    print("User doesn't exist!")
+                    continue
+            elif option == 2:
+                # create new user
+                username = input("Username: ")
+                if users.user_exists(username):
+                    print("User already exists!")
+                    print("+" + "-" * 58 + "+")
+                    continue
+                else:
+                    password = getpass.getpass("Password: ")
+                    password = hash_password(password)
+                    USER_ID = users.add_user(username, password)
+                    print("User created!")
+                    print("+" + "-" * 58 + "+")
+                    break
+            elif option == 3:
+                # exit
+                to_do_list.close()
+                exit()
+            else:
+                print("Invalid option!")
+                print("+" + "-" * 58 + "+")
+                continue
+
+        # print the welcome user message
+        # time.sleep(1)1
+
+        print("Welcome, " + username + "!")
+        print("+" + "-" * 58 + "+")
+
+        # load all tasks from user with user_id
+        tasks = to_do_list.get_tasks(USER_ID)
+        # option to view tasks, add new task, update task, delete task or exit
+        while True:
+            print(
+                "Please select an option:"
+                "\n1. View tasks"
+                "\n2. Add new task"
+                "\n3. Update task"
+                "\n4. Delete task"
+                "\n5. Exit"
+            )
+            print("+" + "-" * 58 + "+")
+            option = int(input("Option: "))
+
+            if option == 1:
+                # view tasks
+                if len(tasks) == 0:
+                    print("No tasks found!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    for task in tasks:
+                        print(
+                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]}"
+                        )
+                        print("+" + "-" * 58 + "+")
+            elif option == 2:
+                # add new task
+                task = input("Task: ")
+                date = input("Date (YYYY-MM-DD): ")
+                if date == "":
+                    print("No date entered!")
+                    date = str(datetime.date.today().strftime("%Y-%m-%d"))
+                    print(f"Using current date - {date}")
+                time = input("Time (HH:MM): ")
+                if time == "":
+                    print("No time entered!")
+                    time = str(
+                        (
+                            datetime.datetime.now() + datetime.timedelta(hours=1)
+                        ).strftime("%H:%M")
+                    )
+                    print(f"Time set to 1 hour from now - {time}")
+                try:
+                    priority = int(input("Priority (1-5): "))
+                except ValueError:
+                    print("Invalid priority!\n Use a number between 1 and 5.")
+                    print("+" + "-" * 58 + "+")
+                    continue
+                to_do_list.add_task(USER_ID, task, date, time, priority)
+                tasks = to_do_list.get_tasks(USER_ID)
+                print("Task added!")
+                print("+" + "-" * 58 + "+")
+            elif option == 3:
+                # update task
+                task_id = int(input("Task ID: "))
+                if to_do_list.check_user(USER_ID, task_id):
+                    task = input("Task: ")
+                    date = input("Date (YYYY-MM-DD): ")
+                if date == "":
+                    print("No date entered!")
+                    date = str(datetime.date.today().strftime("%Y-%m-%d"))
+                    print(f"Using current date - {date}")
+                time = input("Time (HH:MM): ")
+                if time == "":
+                    print("No time entered!")
+                    time = str(
+                        (
+                            datetime.datetime.now() + datetime.timedelta(hours=1)
+                        ).strftime("%H:%M")
+                    )
+                    print(f"Time set to 1 hour from now - {time}")
+                    try:
+                        priority = int(input("Priority (1-5): "))
+                    except ValueError:
+                        print("Invalid priority!\n Use a number between 1 and 5.")
+                        print("+" + "-" * 58 + "+")
+                        continue
+                    to_do_list.update_task(task_id, task, date, time, priority)
+                    tasks = to_do_list.get_tasks(USER_ID)
+                    print("Task updated!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    print("You are not the owner of the task!")
+                    print("+" + "-" * 58 + "+")
+            elif option == 4:
+                # delete task
+                task_id = int(input("Task ID: "))
+                if to_do_list.check_user(USER_ID, task_id):
+                    to_do_list.delete_task(task_id)
+                    tasks = to_do_list.get_tasks(USER_ID)
+                    print("Task deleted!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    print("You are not the owner of the task!")
+                    print("+" + "-" * 58 + "+")
+            elif option == 5:
+                # exit
+                to_do_list.close()
+                exit()
+            else:
+                print("Invalid option!")
+                print("+" + "-" * 58 + "+")
+                continue
+
+    except KeyboardInterrupt:
+        print("\nExiting the application...")
+        to_do_list.close()
+        exit()
 
 
 # MAIN
+if __name__ == "__main__":
+    main()
