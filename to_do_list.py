@@ -30,7 +30,8 @@ class ToDos:
                 task TEXT, 
                 date TEXT, 
                 time TEXT, 
-                priority INTEGER, 
+                priority INTEGER,
+                status TEXT DEFAULT 'Pending',
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
             )"""
         )
@@ -52,11 +53,6 @@ class ToDos:
         )
         self.conn.commit()
 
-    # function to delete task
-    def delete_task(self, task_id):
-        self.c.execute("DELETE FROM to_do_list WHERE id=?", (task_id,))
-        self.conn.commit()
-
     # function to update task
     # default date and time  = current date and time
     def update_task(
@@ -68,7 +64,7 @@ class ToDos:
         priority,
     ):
         self.c.execute(
-            "UPDATE to_do_list SET task=?, date=?, time=?, priority=? WHERE id=?",
+            "UPDATE to_do_list SET task=?, date=?, time=?, priority=? status='Pending' WHERE id=?",
             (task, date, time, priority, task_id),
         )
         self.conn.commit()
@@ -77,6 +73,46 @@ class ToDos:
     def get_tasks(self, user_id):
         self.c.execute("SELECT * FROM to_do_list WHERE user_id=?", (user_id,))
         return self.c.fetchall()
+
+    def get_pending_tasks(self, user_id):
+        self.c.execute(
+            "SELECT * FROM to_do_list WHERE user_id=? AND status='Pending'", (user_id,)
+        )
+        return self.c.fetchall()
+
+    def get_completed_tasks(self, user_id):
+        self.c.execute(
+            "SELECT * FROM to_do_list WHERE user_id=? AND status='Completed'",
+            (user_id,),
+        )
+        return self.c.fetchall()
+
+    def get_overdue_tasks(self, user_id):
+        self.c.execute(
+            "SELECT * FROM to_do_list WHERE user_id=? AND date < ? AND status='Pending'",
+            (user_id, datetime.date.today().strftime("%Y-%m-%d")),
+        )
+        return self.c.fetchall()
+
+    def get_today_tasks(self, user_id):
+        self.c.execute(
+            "SELECT * FROM to_do_list WHERE user_id=? AND date = ? AND status='Pending'",
+            (user_id, datetime.date.today().strftime("%Y-%m-%d")),
+        )
+        return self.c.fetchall()
+
+    def get_upcoming_tasks(self, user_id):
+        self.c.execute(
+            "SELECT * FROM to_do_list WHERE user_id=? AND date > ? AND status='Pending'",
+            (user_id, datetime.date.today().strftime("%Y-%m-%d")),
+        )
+        return self.c.fetchall()
+
+    def complete_task(self, task_id):
+        self.c.execute(
+            "UPDATE to_do_list SET status='Completed' WHERE id=?", (task_id,)
+        )
+        self.conn.commit()
 
     # function to get task with task_id
     def get_task(self, task_id):
@@ -224,17 +260,22 @@ def main():
         print("Welcome, " + username + "!")
         print("+" + "-" * 58 + "+")
 
-        # load all tasks from user with user_id
-        tasks = to_do_list.get_tasks(USER_ID)
         # option to view tasks, add new task, update task, delete task or exit
         while True:
+            # load all tasks from user with user_id
+            tasks = to_do_list.get_tasks(USER_ID)
             print(
                 "Please select an option:"
                 "\n1. View tasks"
                 "\n2. Add new task"
                 "\n3. Update task"
-                "\n4. Delete task"
-                "\n5. Exit"
+                "\n4. Mark task as completed"
+                "\n5. View pending tasks"
+                "\n6. View completed tasks"
+                "\n7. View overdue tasks"
+                "\n8. View today's tasks"
+                "\n9. View upcoming tasks"
+                "\n10. Exit"
             )
             print("+" + "-" * 58 + "+")
             option = int(input("Option: "))
@@ -247,9 +288,10 @@ def main():
                 else:
                     for task in tasks:
                         print(
-                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]}"
+                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]} | Status: {task[6]}"
                         )
                         print("+" + "-" * 58 + "+")
+
             elif option == 2:
                 # add new task
                 task = input("Task: ")
@@ -277,6 +319,7 @@ def main():
                 tasks = to_do_list.get_tasks(USER_ID)
                 print("Task added!")
                 print("+" + "-" * 58 + "+")
+
             elif option == 3:
                 # update task
                 task_id = int(input("Task ID: "))
@@ -309,18 +352,85 @@ def main():
                 else:
                     print("You are not the owner of the task!")
                     print("+" + "-" * 58 + "+")
+
             elif option == 4:
-                # delete task
+                # mark task as completed
                 task_id = int(input("Task ID: "))
                 if to_do_list.check_user(USER_ID, task_id):
-                    to_do_list.delete_task(task_id)
+                    to_do_list.complete_task(task_id)
                     tasks = to_do_list.get_tasks(USER_ID)
-                    print("Task deleted!")
+                    print("Task marked as completed!")
                     print("+" + "-" * 58 + "+")
                 else:
                     print("You are not the owner of the task!")
                     print("+" + "-" * 58 + "+")
+
             elif option == 5:
+                # view pending tasks
+                tasks = to_do_list.get_pending_tasks(USER_ID)
+                if len(tasks) == 0:
+                    print("No pending tasks found!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    for task in tasks:
+                        print(
+                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]}"
+                        )
+                        print("+" + "-" * 58 + "+")
+
+            elif option == 6:
+                # view completed tasks
+                tasks = to_do_list.get_completed_tasks(USER_ID)
+                if len(tasks) == 0:
+                    print("No completed tasks found!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    for task in tasks:
+                        print(
+                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]}"
+                        )
+                        print("+" + "-" * 58 + "+")
+
+            elif option == 7:
+                # view overdue tasks
+                tasks = to_do_list.get_overdue_tasks(USER_ID)
+                if len(tasks) == 0:
+                    print("No overdue tasks found!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    for task in tasks:
+                        print(
+                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]}"
+                        )
+                        print("+" + "-" * 58 + "+")
+
+            elif option == 8:
+                # view today's tasks
+                tasks = to_do_list.get_today_tasks(USER_ID)
+                if len(tasks) == 0:
+                    print("No tasks for today found!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    for task in tasks:
+                        print(
+                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]}"
+                        )
+                        print("+" + "-" * 58 + "+")
+
+            elif option == 9:
+                # view upcoming tasks
+                tasks = to_do_list.get_upcoming_tasks(USER_ID)
+                if len(tasks) == 0:
+                    print("No upcoming tasks found!")
+                    print("+" + "-" * 58 + "+")
+                else:
+                    for task in tasks:
+                        print(
+                            f"ID: {task[0]} | Task: {task[2]} | Date: {task[3]} | Time: {task[4]} | Priority: {task[5]}"
+                        )
+                        print("+" + "-" * 58 + "+")
+
+            elif option == 10:
                 # exit
                 to_do_list.close()
                 exit()
